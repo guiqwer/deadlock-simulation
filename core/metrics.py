@@ -43,9 +43,11 @@ def summarize_metrics(metrics: List[Metrics], duration: float, process_names: Li
         status = metric.get("status", "desconhecido")
         retries = metric.get("retries")
         metric_duration = metric.get("duration")
+        wait_time = metric.get("wait_time")
         duration_text = f"{metric_duration:.3f}s" if metric_duration is not None else "n/d"
         retries_text = retries if retries is not None else 0
-        print(f" - {name}: status={status}, duração={duration_text}, retries={retries_text}")
+        wait_text = f"{wait_time:.3f}s" if wait_time is not None else "n/d"
+        print(f" - {name}: status={status}, duração={duration_text}, espera={wait_text}, retries={retries_text}")
 
     reported = {metric.get("name") for metric in metrics}
     missing = [name for name in process_names if name not in reported]
@@ -58,10 +60,13 @@ def summarize_metrics(metrics: List[Metrics], duration: float, process_names: Li
 
     avg_retries = average([metric.get("retries") for metric in metrics if isinstance(metric.get("retries"), (int, float))])  # type: ignore[arg-type]
     avg_duration = average([metric.get("duration") for metric in metrics if isinstance(metric.get("duration"), (int, float))])  # type: ignore[arg-type]
+    avg_wait_time = average([metric.get("wait_time") for metric in metrics if isinstance(metric.get("wait_time"), (int, float))])  # type: ignore[arg-type]
     if avg_retries is not None:
         print(f"[{scenario_tag}] Média de retries: {avg_retries:.1f}")
     if avg_duration is not None:
         print(f"[{scenario_tag}] Tempo total médio: {avg_duration:.2f}s")
+    if avg_wait_time is not None:
+        print(f"[{scenario_tag}] Tempo médio aguardando recurso: {avg_wait_time:.2f}s")
     print()
 
 

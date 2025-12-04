@@ -5,14 +5,14 @@ import sys
 from cli import main as cli_main
 
 PRESET_ARGS: list[str] | None = [
-    "deadlock", # parametros: deadlock || ordenado || retry || banqueiro || todos
+    "todos", # parametros: deadlock || ordenado || retry || banqueiro || todos
     "--workers",
-    "10", # quantidade de processos
+    "2", # quantidade de processos
     "--progress",
     "--metrics-out",
-    "logs/dados.csv", 
+    "logs/todos.json", 
     "--metrics-format",
-    "csv", # json || csv
+    "json", # json || csv
 ]
 
 

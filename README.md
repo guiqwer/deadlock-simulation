@@ -51,7 +51,7 @@ python3 main.py banqueiro --workers 4 --progress
 - Ordem fixa: todos obedecem A → B, removendo o ciclo de espera.
 - Retry/timeout: com ordem inversa, cada processo desiste se o segundo lock não vier rápido, libera o primeiro, espera (backoff) e tenta de novo; eventualmente um progride.
 - Banqueiro: cada processo declara a necessidade máxima; o "banqueiro" só concede pedidos que mantenham um estado seguro (há uma sequência possível de finalização). Os processos nunca entram em deadlock, apenas reagem com mais retries se não houver estado seguro.
-- Resumo de métricas: duração por processo, retries (quando aplicável) e médias por cenário. Se o ambiente bloquear `multiprocessing.Queue`, a telemetria é desativada automaticamente.
+- Resumo de métricas: duração por processo, retries (quando aplicável), tempo esperando recursos e médias por cenário. Se o ambiente bloquear `multiprocessing.Queue`, a telemetria é desativada automaticamente.
 
 ## Notas adicionais
 - As constantes globais ficam em `config.py`. Ajuste `HOLD_TIME`, `DEADLOCK_TIMEOUT` ou `DEFAULT_RETRY_TIMEOUT` para experimentar.

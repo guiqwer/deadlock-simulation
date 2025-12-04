@@ -34,6 +34,7 @@ class Worker(ABC):
         self.metrics_queue = metrics_queue
         self.started_at: float | None = None
         self.retries = 0
+        self.wait_time = 0.0
 
     def log(self, message: str) -> None:
         log(self.name, message)
@@ -51,11 +52,15 @@ class Worker(ABC):
             "status": status,
             "retries": self.retries,
             "duration": duration,
+            "wait_time": round(self.wait_time, 3),
         }
         self.metrics_queue.put(payload)
 
     def increment_retry(self) -> None:
         self.retries += 1
+
+    def add_wait_time(self, amount: float) -> None:
+        self.wait_time += max(0.0, amount)
 
     @abstractmethod
     def run(self) -> None:
@@ -67,22 +72,42 @@ class NaiveWorker(Worker):
 
     def run(self) -> None:
         self.record_start()
+        first_acquired = False
+        second_acquired = False
         try:
             self.log(f"precisa do {self.first_label}")
-            with self.first_lock:
-                self.log(f"pegou {self.first_label}, trabalhando...")
-                time.sleep(self.hold_time)
-                self.log(f"tentando também o {self.second_label}")
-                self.second_lock.acquire()
-                self.log(f"pegou {self.second_label}, terminou trabalho conjunto")
-                time.sleep(self.hold_time)
-                self.second_lock.release()
-                self.log(f"liberou {self.second_label}")
+            wait_start = time.time()
+            self.first_lock.acquire()
+            self.add_wait_time(time.time() - wait_start)
+            first_acquired = True
+
+            self.log(f"pegou {self.first_label}, trabalhando...")
+            time.sleep(self.hold_time)
+            self.log(f"tentando também o {self.second_label}")
+
+            wait_start = time.time()
+            self.second_lock.acquire()
+            self.add_wait_time(time.time() - wait_start)
+            second_acquired = True
+
+            self.log(f"pegou {self.second_label}, terminou trabalho conjunto")
+            time.sleep(self.hold_time)
+            self.second_lock.release()
+            second_acquired = False
+            self.log(f"liberou {self.second_label}")
+
+            self.first_lock.release()
+            first_acquired = False
             self.log(f"liberou {self.first_label} e finalizou")
             self.record_end("ok")
         except Exception:
             self.record_end("erro")
             raise
+        finally:
+            if second_acquired:
+                self.second_lock.release()
+            if first_acquired:
+                self.first_lock.release()
 
 
 class RetryWorker(Worker):
@@ -108,7 +133,9 @@ class RetryWorker(Worker):
         try:
             while True:
                 self.log(f"precisa do {self.first_label}")
+                wait_start = time.time()
                 got_first = self.first_lock.acquire(timeout=self.try_timeout)
+                self.add_wait_time(time.time() - wait_start)
                 if not got_first:
                     self.increment_retry()
                     self.log(f"não conseguiu {self.first_label} em {self.try_timeout}s, tentando de novo")
@@ -116,7 +143,9 @@ class RetryWorker(Worker):
 
                 self.log(f"pegou {self.first_label}, agora quer o {self.second_label}")
                 time.sleep(self.hold_time)
+                wait_start = time.time()
                 got_second = self.second_lock.acquire(timeout=self.try_timeout)
+                self.add_wait_time(time.time() - wait_start)
 
                 if got_second:
                     self.log(f"pegou {self.second_label}, fez o trabalho e vai liberar ambos")
@@ -131,7 +160,9 @@ class RetryWorker(Worker):
                 self.log(f"timeout aguardando {self.second_label}, devolvendo {self.first_label}")
                 self.first_lock.release()
                 sleep_for = self.hold_time / 2 + self._rng.uniform(0, self.hold_time / 2)
+                start_sleep = time.time()
                 time.sleep(sleep_for)
+                self.add_wait_time(time.time() - start_sleep)
         except Exception:
             self.record_end("erro")
             raise
@@ -150,7 +181,6 @@ class BankerWorker(Worker):
         hold_time: float,
         metrics_queue: Optional[mp.Queue] = None,
     ) -> None:
-        # Locks são apenas placeholders para compatibilidade com a superclasse.
         super().__init__(
             name,
             threading.Lock(),
@@ -211,7 +241,10 @@ class BankerWorker(Worker):
                     f"pedido {request} negado (estado inseguro ou sem recursos), "
                     f"esperando {self.wait_between_attempts:.2f}s"
                 )
-                time.sleep(self.wait_between_attempts + self._rng.uniform(0, self.hold_time / 2))
+                wait_for = self.wait_between_attempts + self._rng.uniform(0, self.hold_time / 2)
+                start_sleep = time.time()
+                time.sleep(wait_for)
+                self.add_wait_time(time.time() - start_sleep)
         except Exception:
             self.record_end("erro")
             raise
