@@ -3,6 +3,7 @@
 import multiprocessing as mp
 import queue
 import random
+import string
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -72,38 +73,48 @@ class Scenario(ABC):
     def describe_resources(self) -> None:
         """Informação opcional sobre os recursos disponíveis."""
 
+    @staticmethod
+    def generate_labels(count: int) -> List[str]:
+        labels: List[str] = []
+        alphabet = string.ascii_uppercase
+        for idx in range(count):
+            letter = alphabet[idx % len(alphabet)]
+            suffix = idx // len(alphabet)
+            if suffix:
+                labels.append(f"Recurso {letter}{suffix + 1}")
+            else:
+                labels.append(f"Recurso {letter}")
+        return labels
+
 
 class DeadlockScenario(Scenario):
     """Cria deadlock intencional para ser detectado."""
 
-    def __init__(self, hold_time: float, timeout: float, show_progress: bool = False, workers: int = 2) -> None:
+    def __init__(
+        self,
+        hold_time: float,
+        timeout: float,
+        show_progress: bool = False,
+        workers: int = 2,
+        resource_count: int = 2,
+    ) -> None:
         super().__init__("CENÁRIO 1: Deadlock intencional", show_progress, workers)
         self.hold_time = hold_time
         self.timeout = timeout
+        self.resource_count = max(1, resource_count)
+        self.resource_labels = self.generate_labels(self.resource_count)
 
     def build_workers(self, metrics_queue: mp.Queue | None) -> List[Worker]:
-        lock_a = mp.Lock()
-        lock_b = mp.Lock()
+        locks = [mp.Lock() for _ in range(self.resource_count)]
         workers: List[Worker] = []
         for idx in range(self.workers):
             if idx % 2 == 0:
-                first_lock, first_label = lock_a, "Recurso A"
-                second_lock, second_label = lock_b, "Recurso B"
+                order = list(range(self.resource_count))
             else:
-                first_lock, first_label = lock_b, "Recurso B"
-                second_lock, second_label = lock_a, "Recurso A"
-
-            workers.append(
-                NaiveWorker(
-                    f"P{idx + 1}",
-                    first_lock,
-                    first_label,
-                    second_lock,
-                    second_label,
-                    self.hold_time,
-                    metrics_queue,
-                )
-            )
+                order = list(reversed(range(self.resource_count)))
+            ordered_locks = [locks[i] for i in order]
+            ordered_labels = [self.resource_labels[i] for i in order]
+            workers.append(NaiveWorker(f"P{idx + 1}", ordered_locks, ordered_labels, self.hold_time, metrics_queue))
         return workers
 
     def wait_processes(self, processes: Iterable[mp.Process], metrics_queue: mp.Queue | None) -> None:
@@ -134,26 +145,26 @@ class DeadlockScenario(Scenario):
             print("[PAI] Surpreendente! Eles terminaram (talvez o ambiente seja muito rápido).")
 
     def describe_resources(self) -> None:
-        print("[PAI] Recursos: Recurso A=1, Recurso B=1 (locks exclusivos).")
+        resources = ", ".join(f"{label}=1" for label in self.resource_labels)
+        print(f"[PAI] Recursos: {resources} (locks exclusivos).")
 
 
 class OrderedScenario(Scenario):
     """Evita deadlock com ordem fixa na aquisição de recursos."""
 
-    def __init__(self, hold_time: float, show_progress: bool = False, workers: int = 2) -> None:
+    def __init__(self, hold_time: float, show_progress: bool = False, workers: int = 2, resource_count: int = 2) -> None:
         super().__init__("CENÁRIO 2: Prevenção com ordem fixa de aquisição", show_progress, workers)
         self.hold_time = hold_time
+        self.resource_count = max(1, resource_count)
+        self.resource_labels = self.generate_labels(self.resource_count)
 
     def build_workers(self, metrics_queue: mp.Queue | None) -> List[Worker]:
-        lock_a = mp.Lock()
-        lock_b = mp.Lock()
+        locks = [mp.Lock() for _ in range(self.resource_count)]
         return [
             NaiveWorker(
                 f"P{idx + 1}",
-                lock_a,
-                "Recurso A",
-                lock_b,
-                "Recurso B",
+                locks,
+                self.resource_labels,
                 self.hold_time,
                 metrics_queue,
             )
@@ -161,39 +172,45 @@ class OrderedScenario(Scenario):
         ]
 
     def after_finish(self) -> None:
-        print("[PAI] Ambos obedeceram a mesma ordem (A -> B) e finalizaram sem deadlock.\n")
+        print("[PAI] Todos obedeceram à mesma ordem de recursos e finalizaram sem deadlock.\n")
 
     def describe_resources(self) -> None:
-        print("[PAI] Recursos: Recurso A=1, Recurso B=1 (locks exclusivos).")
+        resources = ", ".join(f"{label}=1" for label in self.resource_labels)
+        print(f"[PAI] Recursos: {resources} (locks exclusivos).")
 
 
 class RetryScenario(Scenario):
     """Evita deadlock com timeout + backoff aleatório."""
 
-    def __init__(self, hold_time: float, try_timeout: float, show_progress: bool = False, workers: int = 2) -> None:
+    def __init__(
+        self,
+        hold_time: float,
+        try_timeout: float,
+        show_progress: bool = False,
+        workers: int = 2,
+        resource_count: int = 2,
+    ) -> None:
         super().__init__("CENÁRIO 3: Recuperação com timeout + backoff", show_progress, workers)
         self.hold_time = hold_time
         self.try_timeout = try_timeout
+        self.resource_count = max(1, resource_count)
+        self.resource_labels = self.generate_labels(self.resource_count)
 
     def build_workers(self, metrics_queue: mp.Queue | None) -> List[Worker]:
-        lock_a = mp.Lock()
-        lock_b = mp.Lock()
+        locks = [mp.Lock() for _ in range(self.resource_count)]
         workers: List[Worker] = []
         for idx in range(self.workers):
             if idx % 2 == 0:
-                first_lock, first_label = lock_a, "Recurso A"
-                second_lock, second_label = lock_b, "Recurso B"
+                order = list(range(self.resource_count))
             else:
-                first_lock, first_label = lock_b, "Recurso B"
-                second_lock, second_label = lock_a, "Recurso A"
-
+                order = list(reversed(range(self.resource_count)))
+            ordered_locks = [locks[i] for i in order]
+            ordered_labels = [self.resource_labels[i] for i in order]
             workers.append(
                 RetryWorker(
                     f"P{idx + 1}",
-                    first_lock,
-                    first_label,
-                    second_lock,
-                    second_label,
+                    ordered_locks,
+                    ordered_labels,
                     self.hold_time,
                     self.try_timeout,
                     metrics_queue,
@@ -205,18 +222,27 @@ class RetryScenario(Scenario):
         print("[PAI] Timeouts evitaram o deadlock mesmo com ordem inversa.\n")
 
     def describe_resources(self) -> None:
-        print("[PAI] Recursos: Recurso A=1, Recurso B=1 (locks exclusivos).")
+        resources = ", ".join(f"{label}=1" for label in self.resource_labels)
+        print(f"[PAI] Recursos: {resources} (locks exclusivos).")
 
 
 class BankerScenario(Scenario):
     """Evita estados inseguros com o algoritmo do banqueiro."""
 
-    def __init__(self, hold_time: float, show_progress: bool = False, workers: int = 3) -> None:
+    def __init__(
+        self,
+        hold_time: float,
+        show_progress: bool = False,
+        workers: int = 3,
+        resource_count: int = 2,
+        resource_units: int = 1,
+    ) -> None:
         super().__init__("CENÁRIO 4: Evitação com algoritmo do banqueiro", show_progress, workers)
         self.hold_time = hold_time
-        self.resource_labels = ["Recurso A", "Recurso B"]
-        base_capacity = max(2, workers - 1)
-        self.resource_pool = [base_capacity, base_capacity]
+        self.resource_count = max(1, resource_count)
+        self.resource_labels = self.generate_labels(self.resource_count)
+        self.resource_units = max(1, resource_units)
+        self.resource_pool = [self.resource_units for _ in range(self.resource_count)]
         self._printed_resources = False
 
     def run(self) -> List[Metrics]:
@@ -277,14 +303,17 @@ class BankerScenario(Scenario):
         rng = random.Random(self.workers)
         claims: List[List[int]] = []
         for _ in range(self.workers):
-            claim_a = 1 + rng.randint(0, 1)
-            claim_b = 1 + rng.randint(0, 1)
-            claims.append([claim_a, claim_b])
+            claim: List[int] = []
+            for _idx in range(self.resource_count):
+                max_need = max(1, self.resource_units)
+                claim.append(rng.randint(1, max_need))
+            claims.append(claim)
         return claims
 
     def _print_claims(self, claims: List[List[int]]) -> None:
         if not self._printed_resources:
             self.describe_resources()
         print("[PAI] Necessidades máximas declaradas por processo:")
-        for idx, (need_a, need_b) in enumerate(claims):
-            print(f" - P{idx + 1}: {need_a}x {self.resource_labels[0]}, {need_b}x {self.resource_labels[1]}")
+        for idx, claim in enumerate(claims):
+            needs_text = ", ".join(f"{amount}x {label}" for amount, label in zip(claim, self.resource_labels))
+            print(f" - P{idx + 1}: {needs_text}")

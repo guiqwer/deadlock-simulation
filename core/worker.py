@@ -5,7 +5,7 @@ import random
 import threading
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Any, List, Optional, Sequence
 
 from core.banker import Banker
 from core.logging_utils import log
@@ -18,18 +18,14 @@ class Worker(ABC):
     def __init__(
         self,
         name: str,
-        first_lock: mp.Lock,
-        first_label: str,
-        second_lock: mp.Lock,
-        second_label: str,
+        locks: Sequence[Any],
+        lock_labels: Sequence[str],
         hold_time: float,
         metrics_queue: Optional[mp.Queue] = None,
     ) -> None:
         self.name = name
-        self.first_lock = first_lock
-        self.first_label = first_label
-        self.second_lock = second_lock
-        self.second_label = second_label
+        self.locks = list(locks)
+        self.lock_labels = list(lock_labels)
         self.hold_time = hold_time
         self.metrics_queue = metrics_queue
         self.started_at: float | None = None
@@ -72,42 +68,33 @@ class NaiveWorker(Worker):
 
     def run(self) -> None:
         self.record_start()
-        first_acquired = False
-        second_acquired = False
+        acquired: List[int] = []
         try:
-            self.log(f"precisa do {self.first_label}")
-            wait_start = time.time()
-            self.first_lock.acquire()
-            self.add_wait_time(time.time() - wait_start)
-            first_acquired = True
+            for idx, (lock, label) in enumerate(zip(self.locks, self.lock_labels)):
+                self.log(f"precisa do {label}")
+                wait_start = time.time()
+                lock.acquire()
+                self.add_wait_time(time.time() - wait_start)
+                acquired.append(idx)
+                self.log(f"pegou {label}, trabalhando...")
+                time.sleep(self.hold_time)
 
-            self.log(f"pegou {self.first_label}, trabalhando...")
-            time.sleep(self.hold_time)
-            self.log(f"tentando também o {self.second_label}")
-
-            wait_start = time.time()
-            self.second_lock.acquire()
-            self.add_wait_time(time.time() - wait_start)
-            second_acquired = True
-
-            self.log(f"pegou {self.second_label}, terminou trabalho conjunto")
-            time.sleep(self.hold_time)
-            self.second_lock.release()
-            second_acquired = False
-            self.log(f"liberou {self.second_label}")
-
-            self.first_lock.release()
-            first_acquired = False
-            self.log(f"liberou {self.first_label} e finalizou")
+            self.log("terminou trabalho conjunto, liberando recursos")
+            for idx in reversed(acquired):
+                self.locks[idx].release()
+                self.log(f"liberou {self.lock_labels[idx]}")
+            acquired.clear()
             self.record_end("ok")
         except Exception:
             self.record_end("erro")
             raise
         finally:
-            if second_acquired:
-                self.second_lock.release()
-            if first_acquired:
-                self.first_lock.release()
+            # Em caso de erro, libera o que estiver segurando.
+            for idx in reversed(acquired):
+                try:
+                    self.locks[idx].release()
+                except Exception:
+                    pass
 
 
 class RetryWorker(Worker):
@@ -116,15 +103,13 @@ class RetryWorker(Worker):
     def __init__(
         self,
         name: str,
-        first_lock: mp.Lock,
-        first_label: str,
-        second_lock: mp.Lock,
-        second_label: str,
+        locks: Sequence[Any],
+        lock_labels: Sequence[str],
         hold_time: float,
         try_timeout: float,
         metrics_queue: Optional[mp.Queue] = None,
     ) -> None:
-        super().__init__(name, first_lock, first_label, second_lock, second_label, hold_time, metrics_queue)
+        super().__init__(name, locks, lock_labels, hold_time, metrics_queue)
         self.try_timeout = try_timeout
         self._rng = random.Random(name)
 
@@ -132,33 +117,36 @@ class RetryWorker(Worker):
         self.record_start()
         try:
             while True:
-                self.log(f"precisa do {self.first_label}")
-                wait_start = time.time()
-                got_first = self.first_lock.acquire(timeout=self.try_timeout)
-                self.add_wait_time(time.time() - wait_start)
-                if not got_first:
-                    self.increment_retry()
-                    self.log(f"não conseguiu {self.first_label} em {self.try_timeout}s, tentando de novo")
-                    continue
-
-                self.log(f"pegou {self.first_label}, agora quer o {self.second_label}")
-                time.sleep(self.hold_time)
-                wait_start = time.time()
-                got_second = self.second_lock.acquire(timeout=self.try_timeout)
-                self.add_wait_time(time.time() - wait_start)
-
-                if got_second:
-                    self.log(f"pegou {self.second_label}, fez o trabalho e vai liberar ambos")
+                acquired: List[int] = []
+                failed = False
+                for idx, (lock, label) in enumerate(zip(self.locks, self.lock_labels)):
+                    self.log(f"precisa do {label}")
+                    wait_start = time.time()
+                    got = lock.acquire(timeout=self.try_timeout)
+                    self.add_wait_time(time.time() - wait_start)
+                    if not got:
+                        self.increment_retry()
+                        self.log(f"timeout aguardando {label}, liberando recursos já segurados")
+                        failed = True
+                        break
+                    acquired.append(idx)
+                    self.log(f"pegou {label}, trabalhando...")
                     time.sleep(self.hold_time)
-                    self.second_lock.release()
-                    self.first_lock.release()
+
+                if not failed and len(acquired) == len(self.locks):
+                    self.log("pegou todos os recursos, fazendo o trabalho e liberando")
+                    time.sleep(self.hold_time)
+                    for idx in reversed(acquired):
+                        self.locks[idx].release()
                     self.log("liberou recursos e finalizou sem deadlock")
                     self.record_end("ok")
                     break
 
-                self.increment_retry()
-                self.log(f"timeout aguardando {self.second_label}, devolvendo {self.first_label}")
-                self.first_lock.release()
+                for idx in reversed(acquired):
+                    try:
+                        self.locks[idx].release()
+                    except Exception:
+                        pass
                 sleep_for = self.hold_time / 2 + self._rng.uniform(0, self.hold_time / 2)
                 start_sleep = time.time()
                 time.sleep(sleep_for)
@@ -181,15 +169,7 @@ class BankerWorker(Worker):
         hold_time: float,
         metrics_queue: Optional[mp.Queue] = None,
     ) -> None:
-        super().__init__(
-            name,
-            threading.Lock(),
-            resource_labels[0],
-            threading.Lock(),
-            resource_labels[1],
-            hold_time,
-            metrics_queue,
-        )
+        super().__init__(name, [], [], hold_time, metrics_queue)
         self.banker = banker
         self.process_id = process_id
         self.claim = claim

@@ -18,7 +18,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     def positive_int(value: str) -> int:
         ivalue = int(value)
         if ivalue < 1:
-            raise argparse.ArgumentTypeError("use um inteiro >= 1 para --workers")
+            raise argparse.ArgumentTypeError("use um inteiro >= 1")
         return ivalue
 
     parser.add_argument(
@@ -52,6 +52,20 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=2,
         help="Quantidade de processos a lançar em cada cenário (padrão: 2).",
     )
+    parser.add_argument(
+        "--resources",
+        "-r",
+        type=positive_int,
+        default=2,
+        help="Quantidade de recursos compartilhados (padrão: 2).",
+    )
+    parser.add_argument(
+        "--resource-units",
+        "-u",
+        type=positive_int,
+        default=1,
+        help="Quantidade de unidades por recurso (aplicável ao banqueiro, padrão: 1).",
+    )
     return parser.parse_args(argv)
 
 
@@ -61,12 +75,14 @@ def run_selected_scenarios(
     metrics_format: str,
     show_progress: bool,
     workers: int,
+    resources: int,
+    resource_units: int,
 ) -> None:
     scenarios = {
-        "deadlock": DeadlockScenario(HOLD_TIME, DEADLOCK_TIMEOUT, show_progress, workers),
-        "ordenado": OrderedScenario(HOLD_TIME, show_progress, workers),
-        "retry": RetryScenario(HOLD_TIME, try_timeout=DEFAULT_RETRY_TIMEOUT, show_progress=show_progress, workers=workers),
-        "banqueiro": BankerScenario(HOLD_TIME, show_progress, workers),
+        "deadlock": DeadlockScenario(HOLD_TIME, DEADLOCK_TIMEOUT, show_progress, workers, resource_count=resources),
+        "ordenado": OrderedScenario(HOLD_TIME, show_progress, workers, resource_count=resources),
+        "retry": RetryScenario(HOLD_TIME, try_timeout=DEFAULT_RETRY_TIMEOUT, show_progress=show_progress, workers=workers, resource_count=resources),
+        "banqueiro": BankerScenario(HOLD_TIME, show_progress, workers, resource_count=resources, resource_units=resource_units),
     }
     all_metrics: List[Metrics] = []
 
@@ -83,7 +99,15 @@ def run_selected_scenarios(
 def main(argv: List[str]) -> None:
     configure_multiprocessing()
     args = parse_args(argv)
-    run_selected_scenarios(args.cenario, args.metrics_out, args.metrics_format, args.progress, args.workers)
+    run_selected_scenarios(
+        args.cenario,
+        args.metrics_out,
+        args.metrics_format,
+        args.progress,
+        args.workers,
+        args.resources,
+        args.resource_units,
+    )
 
 
 if __name__ == "__main__":
