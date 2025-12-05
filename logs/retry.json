@@ -1,0 +1,38 @@
+[
+  {
+    "name": "P2",
+    "status": "ok",
+    "retries": 0,
+    "duration": 2.6,
+    "wait_time": 0.999,
+    "scenario": "CENÁRIO 3: Recuperação com timeout + backoff",
+    "cenario": "CENÁRIO 3"
+  },
+  {
+    "name": "P4",
+    "status": "ok",
+    "retries": 3,
+    "duration": 6.999,
+    "wait_time": 4.598,
+    "scenario": "CENÁRIO 3: Recuperação com timeout + backoff",
+    "cenario": "CENÁRIO 3"
+  },
+  {
+    "name": "P1",
+    "status": "ok",
+    "retries": 4,
+    "duration": 8.602,
+    "wait_time": 5.401,
+    "scenario": "CENÁRIO 3: Recuperação com timeout + backoff",
+    "cenario": "CENÁRIO 3"
+  },
+  {
+    "name": "P3",
+    "status": "ok",
+    "retries": 6,
+    "duration": 10.201,
+    "wait_time": 7.799,
+    "scenario": "CENÁRIO 3: Recuperação com timeout + backoff",
+    "cenario": "CENÁRIO 3"
+  }
+]

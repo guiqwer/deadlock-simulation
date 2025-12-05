@@ -1,0 +1,38 @@
+[
+  {
+    "name": "P1",
+    "status": "ok",
+    "retries": 0,
+    "duration": 1.601,
+    "wait_time": 0.0,
+    "scenario": "CENÁRIO 2: Prevenção com ordem fixa de aquisição",
+    "cenario": "CENÁRIO 2"
+  },
+  {
+    "name": "P2",
+    "status": "ok",
+    "retries": 0,
+    "duration": 3.2,
+    "wait_time": 1.599,
+    "scenario": "CENÁRIO 2: Prevenção com ordem fixa de aquisição",
+    "cenario": "CENÁRIO 2"
+  },
+  {
+    "name": "P3",
+    "status": "ok",
+    "retries": 0,
+    "duration": 4.8,
+    "wait_time": 3.199,
+    "scenario": "CENÁRIO 2: Prevenção com ordem fixa de aquisição",
+    "cenario": "CENÁRIO 2"
+  },
+  {
+    "name": "P4",
+    "status": "ok",
+    "retries": 0,
+    "duration": 6.398,
+    "wait_time": 4.797,
+    "scenario": "CENÁRIO 2: Prevenção com ordem fixa de aquisição",
+    "cenario": "CENÁRIO 2"
+  }
+]

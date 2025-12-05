@@ -4,6 +4,7 @@
     "status": "ok",
     "retries": 0,
     "duration": 0.8,
+    "wait_time": 0.0,
     "scenario": "CENÁRIO 4: Evitação com algoritmo do banqueiro",
     "cenario": "CENÁRIO 4"
   },
@@ -11,7 +12,8 @@
     "name": "P4",
     "status": "ok",
     "retries": 2,
-    "duration": 1.781,
+    "duration": 1.782,
+    "wait_time": 0.981,
     "scenario": "CENÁRIO 4: Evitação com algoritmo do banqueiro",
     "cenario": "CENÁRIO 4"
   },
@@ -20,6 +22,7 @@
     "status": "ok",
     "retries": 2,
     "duration": 1.995,
+    "wait_time": 0.928,
     "scenario": "CENÁRIO 4: Evitação com algoritmo do banqueiro",
     "cenario": "CENÁRIO 4"
   },
@@ -27,7 +30,8 @@
     "name": "P3",
     "status": "ok",
     "retries": 4,
-    "duration": 3.258,
+    "duration": 3.259,
+    "wait_time": 2.191,
     "scenario": "CENÁRIO 4: Evitação com algoritmo do banqueiro",
     "cenario": "CENÁRIO 4"
   }

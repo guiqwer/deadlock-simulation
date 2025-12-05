@@ -1,7 +1,0 @@
-cenario,duration,name,retries,scenario,status
-CENÁRIO 2,1.601,P1,0,CENÁRIO 2: Prevenção com ordem fixa de aquisição,ok
-CENÁRIO 2,3.2,P2,0,CENÁRIO 2: Prevenção com ordem fixa de aquisição,ok
-CENÁRIO 3,2.6,P2,0,CENÁRIO 3: Recuperação com timeout + backoff,ok
-CENÁRIO 3,4.201,P1,1,CENÁRIO 3: Recuperação com timeout + backoff,ok
-CENÁRIO 4,0.8,P1,0,CENÁRIO 4: Evitação com algoritmo do banqueiro,ok
-CENÁRIO 4,1.995,P2,2,CENÁRIO 4: Evitação com algoritmo do banqueiro,ok
